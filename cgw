@@ -1,0 +1,151 @@
+#!/bin/bash
+# cgw — switch Codex Web GPT between ChatGPT accounts in one command.
+#
+# Per account it keeps: ChatGPT browser login (partition snapshot), tunnel id, runtime key.
+#   cgw adopt NAME                          register the account that is set up right now
+#   cgw add NAME TUNNEL_ID KEY_FILE         register another account (key is copied, 0600)
+#   cgw use NAME                            switch to NAME (DRY=1 cgw use NAME to preview)
+#   cgw list | status | remove NAME
+set -uo pipefail
+
+H="$HOME/.codex-chatgpt-web"
+ACC="$H/accounts"
+APP="Codex Web GPT"
+UD="$HOME/Library/Application Support/Codex Web GPT"
+PART="$UD/Partitions/codex-web-gpt-chatgpt"
+PORT=17841
+
+die() { echo "cgw: $*" >&2; exit 1; }
+run() { if [ "${DRY:-}" = 1 ]; then echo "[dry-run] $*"; else "$@"; fi; }
+
+V=$(/bin/ls -d "$H"/versions/*/ 2>/dev/null | sort -V | tail -1); V=${V%/}
+[ -n "$V" ] || die "no codex-chatgpt-web version found in $H/versions"
+cgw_cli() { "$V/runtime/bun" "$V/app/cli.js" "$@"; }
+
+current() { cat "$ACC/.current" 2>/dev/null || true; }
+env_get() { sed -n "s/^$2=//p" "$ACC/$1/account.env" | head -1; }
+need_acc() { [ -f "$ACC/$1/account.env" ] || die "unknown account '$1' (see: cgw list)"; }
+
+quit_launcher() {
+  run osascript -e "tell application \"$APP\" to quit" >/dev/null 2>&1 || true
+  [ "${DRY:-}" = 1 ] && return
+  for _ in $(seq 1 30); do pgrep -x "$APP" >/dev/null || break; sleep 1; done
+  pgrep -x "$APP" >/dev/null && die "$APP did not quit"
+  sleep 2
+  pkill -f "$H/bin/tunnel-client run" 2>/dev/null || true
+  sleep 1
+}
+
+start_launcher() {
+  run open -a "$APP"
+  [ "${DRY:-}" = 1 ] && return
+  for _ in $(seq 1 60); do
+    [ -f "$H/runtime/launcher-browser.json" ] && lsof -nP -iTCP:$PORT -sTCP:LISTEN >/dev/null 2>&1 && return
+    sleep 1
+  done
+  die "launcher did not come up"
+}
+
+free_port() { # setup binds the proxy port itself; the launcher's own serve must step aside
+  [ "${DRY:-}" = 1 ] && { echo "[dry-run] kill listener on :$PORT"; return; }
+  local p; p=$(lsof -nP -iTCP:$PORT -sTCP:LISTEN -t 2>/dev/null || true)
+  [ -n "$p" ] && kill $p
+  for _ in 1 2 3 4 5 6 7 8; do lsof -nP -iTCP:$PORT -sTCP:LISTEN >/dev/null 2>&1 || return; sleep 1; done
+  die "port $PORT still busy"
+}
+
+cmd_adopt() {
+  local n=${1:-}; [ -n "$n" ] || die "usage: cgw adopt NAME"
+  local tid; tid=$(python3 -c "import json;print(json.load(open('$H/config.json'))['tunnel']['tunnelId'])") || die "no tunnel in config.json"
+  mkdir -p "$ACC/$n"; chmod 700 "$ACC" "$ACC/$n"
+  install -m 600 "$H/secrets/tunnel-runtime-automatic.key" "$ACC/$n/runtime.key"
+  printf 'TUNNEL_ID=%s\n' "$tid" > "$ACC/$n/account.env"
+  echo "$n" > "$ACC/.current"
+  echo "adopted '$n' ($tid) as the current account"
+}
+
+cmd_add() {
+  local n=${1:-} tid=${2:-} kf=${3:-}
+  [ -n "$n" ] && [ -n "$tid" ] && [ -f "$kf" ] || die "usage: cgw add NAME TUNNEL_ID KEY_FILE"
+  local code; code=$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $(cat "$kf")" "https://api.openai.com/v1/tunnels/$tid")
+  [ "$code" = 200 ] || die "key cannot read that tunnel (HTTP $code) — check org/workspace and Tunnels Read+Use"
+  mkdir -p "$ACC/$n"; chmod 700 "$ACC" "$ACC/$n"
+  install -m 600 "$kf" "$ACC/$n/runtime.key"
+  printf 'TUNNEL_ID=%s\n' "$tid" > "$ACC/$n/account.env"
+  echo "added '$n'. Switch with: cgw use $n   (first switch opens ChatGPT login)"
+}
+
+cmd_use() {
+  local n=${1:-}; [ -n "$n" ] || die "usage: cgw use NAME"; need_acc "$n"
+  local cur; cur=$(current)
+  local tid; tid=$(env_get "$n" TUNNEL_ID)
+  local login=""
+
+  echo "==> quitting launcher"; quit_launcher
+
+  if [ "$cur" != "$n" ]; then
+    if [ -n "$cur" ] && [ -d "$PART" ]; then
+      echo "==> saving ChatGPT login of '$cur'"
+      run rm -rf "$ACC/$cur/partition.old"
+      [ -d "$ACC/$cur/partition" ] && run mv "$ACC/$cur/partition" "$ACC/$cur/partition.old"
+      run mv "$PART" "$ACC/$cur/partition"
+      run rm -rf "$ACC/$cur/partition.old"
+    elif [ -d "$PART" ]; then
+      die "a ChatGPT login exists but no current account is registered — run: cgw adopt NAME first"
+    fi
+    if [ -d "$ACC/$n/partition" ]; then
+      echo "==> restoring ChatGPT login of '$n'"
+      run mv "$ACC/$n/partition" "$PART"
+    else
+      echo "==> no saved login for '$n' — a ChatGPT sign-in will be requested"; login="--login"
+    fi
+  fi
+
+  echo "==> starting launcher"; start_launcher
+  free_port
+  echo "==> configuring tunnel for '$n'"
+  if [ "${DRY:-}" = 1 ]; then
+    echo "[dry-run] cgw setup --full $login --refresh-account-capabilities --tunnel-id $tid --runtime-key-file $ACC/$n/runtime.key"
+  else
+    cgw_cli setup --full $login --refresh-account-capabilities --tunnel-id "$tid" --runtime-key-file "$ACC/$n/runtime.key" || die "setup failed (launcher is open; fix and re-run: cgw use $n)"
+  fi
+  echo "==> restarting launcher so the tunnel profile is regenerated"
+  quit_launcher; start_launcher
+  [ "${DRY:-}" = 1 ] || echo "$n" > "$ACC/.current"
+  sleep 5
+  echo "==> doctor"; [ "${DRY:-}" = 1 ] || cgw_cli doctor 2>&1 | tail -14
+  cat <<EOF
+
+Done: active account = $n
+Manual steps ChatGPT does not allow automating (once per account):
+  1. https://chatgpt.com/#settings/Plugins -> attach this tunnel to connector "Codex Native2"
+  2. Restart the Codex app if the model list looks stale
+EOF
+}
+
+cmd_list() {
+  local cur; cur=$(current)
+  [ -d "$ACC" ] || { echo "no accounts yet — run: cgw adopt NAME"; return; }
+  for d in "$ACC"/*/; do
+    n=$(basename "$d"); [ -f "$d/account.env" ] || continue
+    printf '%s %-16s %s  login:%s\n' "$([ "$n" = "$cur" ] && echo '*' || echo ' ')" "$n" "$(env_get "$n" TUNNEL_ID)" \
+      "$([ "$n" = "$cur" ] && echo active || { [ -d "$d/partition" ] && echo saved || echo none; })"
+  done
+}
+
+cmd_status() { echo "current: $(current || true)"; cgw_cli doctor 2>&1 | tail -14; }
+
+cmd_remove() {
+  local n=${1:-}; need_acc "$n"; [ "$(current)" = "$n" ] && die "'$n' is active; switch first"
+  rm -rf "${ACC:?}/$n"; echo "removed '$n' (saved login deleted)"
+}
+
+case "${1:-}" in
+  adopt)  shift; cmd_adopt "$@" ;;
+  add)    shift; cmd_add "$@" ;;
+  use)    shift; cmd_use "$@" ;;
+  list|ls) cmd_list ;;
+  status) cmd_status ;;
+  remove|rm) shift; cmd_remove "$@" ;;
+  *) sed -n '2,10p' "$0" | sed 's/^# \{0,1\}//'; exit 1 ;;
+esac

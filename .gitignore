@@ -1,0 +1,4 @@
+# never commit account data
+accounts/
+*.key
+*.env
