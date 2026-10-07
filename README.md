@@ -10,6 +10,10 @@ full-harness setup by hand every time you change accounts (for example personal 
 `cgw` activates **one account at a time, when you ask it to**. It does not rotate accounts automatically, pool them,
 or work around usage limits.
 
+![cgw demo: adopt an account, take a tunnel ID from the clipboard, list accounts, preview a switch](docs/demo.svg)
+
+<sub>Recorded from real `cgw` output in a sandbox with sample IDs and `DRY=1` (nothing is changed). Regenerate with `docs/demo/record.sh`.</sub>
+
 > **Using an AI agent (Claude Code, Codex, …)?** Just send it:
 > `Install and update a new tunnel for me: https://raw.githubusercontent.com/maemreyo/cgw/main/AGENT_SETUP.md`
 > The agent walks you through it one step at a time ([AGENT_SETUP.md](AGENT_SETUP.md)); you only click, copy and confirm.

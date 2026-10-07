@@ -3,6 +3,8 @@
 Format: [Keep a Changelog](https://keepachangelog.com/), versioning: [SemVer](https://semver.org/).
 
 ## [Unreleased]
+### Added
+- Animated terminal demo (`docs/demo.svg`) and social preview image, both generated from a sandboxed real run by `docs/demo/record.sh`.
 
 ## [0.2.0] - 2026-10-07
 ### Added
