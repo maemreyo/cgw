@@ -4,6 +4,8 @@
 # Per account it keeps: ChatGPT browser login (partition snapshot), tunnel id, runtime key.
 #   cgw adopt NAME                          register the account that is set up right now
 #   cgw add NAME TUNNEL_ID KEY_FILE         register another account (key is copied, 0600)
+#   cgw clip tunnel NAME                    take the tunnel id from the clipboard (user pressed copy)
+#   cgw clip key NAME                       take the runtime key from the clipboard, verify, store, clear clipboard
 #   cgw use NAME                            switch to NAME (DRY=1 cgw use NAME to preview)
 #   cgw list | status | remove NAME
 set -uo pipefail
@@ -74,6 +76,29 @@ cmd_add() {
   install -m 600 "$kf" "$ACC/$n/runtime.key"
   printf 'TUNNEL_ID=%s\n' "$tid" > "$ACC/$n/account.env"
   echo "$verb '$n'. Apply with: cgw use $n   (a new account opens ChatGPT login first)"
+}
+
+cmd_clip() {
+  local what=${1:-} n=${2:-}; [ -n "$n" ] || die "usage: cgw clip tunnel|key NAME"
+  local v; v=$(pbpaste | tr -d '[:space:]')
+  case "$what" in
+    tunnel)
+      [[ "$v" =~ ^tunnel_[0-9a-f]{32}$ ]] || die "clipboard does not hold a tunnel id (expected tunnel_ + 32 hex). Press the copy icon next to the tunnel id and retry"
+      local verb=added; [ -f "$ACC/$n/account.env" ] && verb=updated
+      mkdir -p "$ACC/$n"; chmod 700 "$ACC" "$ACC/$n"
+      printf 'TUNNEL_ID=%s\n' "$v" > "$ACC/$n/account.env"
+      echo "$verb '$n' tunnel: $v" ;;
+    key)
+      need_acc "$n"
+      [ -n "$v" ] && [[ "$v" != tunnel_* ]] && [ "${#v}" -ge 20 ] || die "clipboard does not look like a runtime key; copy it again right after creating it"
+      local tid code tmp; tid=$(env_get "$n" TUNNEL_ID)
+      tmp=$(mktemp); chmod 600 "$tmp"; printf '%s' "$v" > "$tmp"
+      code=$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $v" "https://api.openai.com/v1/tunnels/$tid")
+      if [ "$code" != 200 ]; then rm -f "$tmp"; pbcopy < /dev/null; die "key cannot read tunnel $tid (HTTP $code): create it in the same org/workspace as the tunnel with Tunnels Read+Use. Clipboard cleared"; fi
+      install -m 600 "$tmp" "$ACC/$n/runtime.key"; rm -f "$tmp"; pbcopy < /dev/null
+      echo "key for '$n' verified (HTTP 200), stored 0600, clipboard cleared" ;;
+    *) die "usage: cgw clip tunnel|key NAME" ;;
+  esac
 }
 
 cmd_use() {
@@ -147,6 +172,7 @@ cmd_remove() {
 case "${1:-}" in
   adopt)  shift; cmd_adopt "$@" ;;
   add)    shift; cmd_add "$@" ;;
+  clip)   shift; cmd_clip "$@" ;;
   use)    shift; cmd_use "$@" ;;
   list|ls) cmd_list ;;
   status) cmd_status ;;

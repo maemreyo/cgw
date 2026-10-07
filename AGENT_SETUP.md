@@ -1,106 +1,97 @@
 # Agent runbook: install / update a Codex Web GPT tunnel with `cgw`
 
-You are an AI agent. The user sent you this file with a request such as
-"install and update the new tunnel for me". Follow this runbook top to bottom.
+You are an AI agent. The user sent you this file with a request such as "install and update the new tunnel".
+**Run this as a guided conversation: one step at a time, in the user's language.** The user must not need to
+remember any command, path or ID. Each step: say what you are doing, do it, tell the user the *one* thing you need
+from them (a click, a copy, a yes), then wait. Never dump the whole plan at them.
+
 Target: macOS, [codex-chatgpt-web](https://github.com/miuuyy/codex-chatgpt-web) ("Codex Web GPT" launcher).
 
-## Ground rules (read first)
+## Ground rules
 
-- **Never ask the user to paste a runtime key or token into chat, and never echo one.**
-  Keys live in files; refer to them by path. Redact anything that looks like `sk-…` in output you show.
-- **Do not create OpenAI accounts, API keys or tunnels yourself.** The user creates them in the
-  platform UI; you only consume the tunnel id and a key *file*.
+- **Secrets never go through chat.** The user copies the key (⌘C); you read it from the clipboard with
+  `cgw clip key`, which verifies it, stores it 0600 and clears the clipboard. Never ask the user to paste a key or
+  run `printf`/`echo` with one. Never print a key.
+- **Do not create accounts, API keys or tunnels yourself** (not in a browser either). The user clicks "Create"; you guide.
 - `setup` shows an "independent, unofficial software … automates your ChatGPT web session" notice.
-  **Ask the user to accept it explicitly in chat.** Only after a clear yes, run with `CGW_ACK=1`.
-  A yes given for an earlier run does not carry over to a new version/run — ask again if setup prompts again.
-- Do not delete `~/.codex-chatgpt-web/accounts/` or `~/Library/Application Support/Codex Web GPT/` (saved logins).
-- `cgw use` quits and reopens the launcher and restarts the tunnel (~1 min). Tell the user first if a
-  Codex turn might be running.
+  Ask the user to accept it (show the sentence). Only after a clear yes run with `CGW_ACK=1`. Ask again each run.
+- Never delete `~/.codex-chatgpt-web/accounts/` or `~/Library/Application Support/Codex Web GPT/` (saved logins).
+- `cgw use` quits and reopens the launcher and restarts the tunnel (~1–2 min). Warn the user before running it.
+- If an interactive question tool exists (e.g. AskUserQuestion), use it for choices; otherwise ask in plain text.
 
-## 0. What to collect from the user
+## Script (follow in order)
 
-| Need | Where the user gets it |
-|---|---|
-| Account label (e.g. `work`) | their choice |
-| Tunnel id `tunnel_<32 hex>` | https://platform.openai.com/settings/organization/tunnels (copy button — screenshots are easy to misread; ask for the text) |
-| Runtime key **file path** (Tunnels Read+Use, created in the **same org/workspace as the tunnel**) | https://platform.openai.com/settings/organization/api-keys. Give the user this to run themselves: `umask 077; printf '%s' 'PASTE_KEY' > ~/.codex-chatgpt-web/secrets/<label>.key` |
-
-If the tunnel id or key file is missing, stop and ask — do not guess.
-
-## 1. Preflight
-
+### 1. Preflight (silent)
 ```bash
-ls /Applications/"Codex Web GPT.app" ~/.codex-chatgpt-web/versions   # launcher installed?
-which cgw || echo "cgw missing"
-cgw list 2>/dev/null                                                  # registered accounts, * = active
+ls /Applications/"Codex Web GPT.app" ~/.codex-chatgpt-web/versions; which cgw; cgw list
+```
+Decide silently which of steps 2–3 are needed. Tell the user one line: what's installed and what you'll do.
+
+### 2. Launcher: install or update (skip if already latest)
+Check latest: `gh release view -R miuuyy/codex-chatgpt-web --json tagName --jq .tagName` (or the releases page) vs
+`ls ~/.codex-chatgpt-web/versions`. If outdated/missing, say "I'll update Codex Web GPT to vX; it will close for a moment", then:
+```bash
+osascript -e 'tell application "Codex Web GPT" to quit'      # wait until pgrep -x "Codex Web GPT" is empty
+curl -fsSL https://github.com/miuuyy/codex-chatgpt-web/releases/latest/download/install-launcher.sh -o /tmp/install-launcher.sh
+# skim it, then:
+sh /tmp/install-launcher.sh                                  # verifies SHA-256, keeps logins, reopens the app
 ```
 
-## 2. Install the launcher (only if missing) or update it
-
-1. `osascript -e 'tell application "Codex Web GPT" to quit'` and wait until `pgrep -x "Codex Web GPT"` is empty.
-2. Read, then run the official installer (verifies SHA-256, replaces only the .app, keeps logins):
-   ```bash
-   curl -fsSL https://github.com/miuuyy/codex-chatgpt-web/releases/latest/download/install-launcher.sh -o /tmp/install-launcher.sh
-   less /tmp/install-launcher.sh   # skim it; then:
-   sh /tmp/install-launcher.sh
-   ```
-3. Confirm `~/.codex-chatgpt-web/versions/<new>/` exists (the launcher unpacks it on first start).
-
-## 3. Install cgw (only if missing)
-
+### 3. cgw: install if missing
 ```bash
 git clone https://github.com/maemreyo/cgw ~/Documents/projects/cgw && ~/Documents/projects/cgw/install.sh
 ```
-Make sure `~/.local/bin` is on PATH.
+If `cgw list` is empty but `~/.codex-chatgpt-web/config.json` exists, ask: "Máy đang chạy account nào? Đặt tên gì?" then
+`cgw adopt <name>` — otherwise the current ChatGPT login would be lost on the first switch.
 
-## 4. Register / replace the tunnel
+### 4. Which account? (ask)
+Show `cgw list` and ask: update the tunnel of an existing account, or add a new account? Get a short label.
+For a new label also ask: "Account ChatGPT này đã đăng nhập sẵn ở launcher chưa?" (it will be asked to sign in during step 7 anyway).
 
-- **First time on this machine and a tunnel is already running** (`cgw list` empty, `~/.codex-chatgpt-web/config.json` exists):
-  `cgw adopt <current-label>` so the existing login is not lost, *then* continue.
-- **New account**: `cgw add <label> <tunnel_id> <key_file>`
-- **New tunnel for an existing account** (same command, overwrites id + key, keeps the saved login):
-  `cgw add <label> <new_tunnel_id> <key_file>`
+### 5. Tunnel id — user copies, you read
+1. `open "https://platform.openai.com/settings/organization/tunnels"`
+2. Tell the user: *"Mở đúng organization của account này (góc trên-trái), tạo tunnel mới nếu chưa có (Create), rồi bấm icon copy cạnh ID `tunnel_…` và nhắn mình 'xong'."*
+3. After "xong": `cgw clip tunnel <label>` → prints the id. Show it back and ask "đúng tunnel này chứ?" (the name column is visible to them).
+If it fails with "clipboard does not hold a tunnel id", ask them to click copy again.
 
-`cgw add` validates the key against `GET /v1/tunnels/<id>`; HTTP 200 is required. If it fails with 401/403 the key
-belongs to a different org/workspace than the tunnel — ask the user for a key created in the tunnel's org.
+### 6. Runtime key — user creates + copies, you read
+1. `open "https://platform.openai.com/settings/organization/api-keys"`
+2. Tell the user, concisely: *"Cùng organization và workspace với tunnel. Create new secret key → đặt tên (vd `codex-tunnel`) → quyền Restricted: **Tunnels = Read + Use** → Create. Bấm copy key (⌘C) và nhắn 'xong'. Đừng dán vào chat."*
+3. After "xong": `cgw clip key <label>`.
+   - `verified (HTTP 200)` → continue.
+   - `HTTP 401/403` → key is from another org/workspace or lacks permission. Explain, tell them to create another, repeat.
+   - "does not look like a runtime key" → they copied something else; ask to copy again right after creation (keys are shown once).
 
-## 5. Apply
-
-Ask for the notice acceptance (ground rules), then:
-
+### 7. Apply
+Say what will happen (launcher closes/reopens, ~2 min) and show the notice from "Ground rules"; ask for the yes. Then:
 ```bash
-CGW_ACK=1 cgw use <label>      # preview first with: DRY=1 CGW_ACK=1 cgw use <label>
+CGW_ACK=1 cgw use <label>          # DRY=1 CGW_ACK=1 cgw use <label> previews
 ```
+- No saved login for this label → the launcher opens a ChatGPT sign-in. Tell the user: *"Đăng nhập ChatGPT trong cửa sổ Codex Web GPT vừa mở, xong nhắn mình."* Wait. If setup timed out, re-run `cgw use <label>` (safe to repeat).
+- Do not interrupt midway; re-running recovers.
 
-- If the label has no saved login, the launcher shows a ChatGPT sign-in. **Tell the user to sign in in that
-  window and wait** — you cannot do it for them. Re-run `cgw use <label>` if setup timed out.
-- Run it in a terminal that tolerates ~2 min; do not interrupt midway. If interrupted, just re-run `cgw use <label>`.
-
-## 6. Verify (all must hold)
-
+### 8. Verify
 ```bash
-cgw status                                   # doctor: expect "Doctor result: ready"
-grep -E 'tunnel_id' ~/.codex-chatgpt-web/tunnel/profiles/codex-chatgpt-web.yaml   # must be the NEW id
+cgw status      # expect: Doctor result: ready
+grep tunnel_id ~/.codex-chatgpt-web/tunnel/profiles/codex-chatgpt-web.yaml     # must be the NEW id
 tail -n 5 ~/Library/Application\ Support/tunnel-client/logs/codex-chatgpt-web.log | grep -o '"msg":"[^"]*"'
 ```
-Expect "tunnel-client started" and **no** repeating `poll failed`. The yaml showing the old id means the launcher
-was not restarted — run `cgw use <label>` again.
+Expect "tunnel-client started" and no repeating `poll failed`. Old id in the yaml → run `cgw use <label>` again.
 
-## 7. Hand back to the user (manual, cannot be automated)
+### 9. Hand back (two manual steps, guide them one by one)
+1. `open "https://chatgpt.com/#settings/Plugins"` → *"Gắn tunnel mới vào connector 'Codex Native2' và refresh plugin Codex. Xong nhắn mình."*
+2. *"Restart app Codex một lần để nạp lại danh sách model."*
 
-1. https://chatgpt.com/#settings/Plugins → attach the tunnel to connector **"Codex Native2"** and refresh the Codex plugin.
-2. Restart the Codex app once.
-
-Report: version installed, active label, tunnel id (not the key), doctor result, and the two manual steps.
+Final report (short): launcher version, active label, tunnel id (never the key), doctor result, what's left for them (nothing if both manual steps are done).
 
 ## Troubleshooting
 
 | Symptom | Cause / fix |
 |---|---|
-| `Setup cancelled: acknowledgement was not provided` | You skipped the notice. Ask the user, then `CGW_ACK=1`. |
-| `Cannot bind 127.0.0.1:17841` | Launcher's own `serve` holds the port. `cgw use` handles it; manual: quit launcher or kill that PID. |
+| `Setup cancelled: acknowledgement was not provided` | Notice not accepted. Ask the user, then `CGW_ACK=1`. |
+| `Cannot bind 127.0.0.1:17841` | Launcher's own `serve` holds the port. `cgw use` handles it. |
 | `Launcher browser host is unavailable: descriptor is missing` | Launcher not running. Open it, wait for `~/.codex-chatgpt-web/runtime/launcher-browser.json`. |
-| Log: `401 tunnel_active_organization_required` / 403 on tunnel | Key from another org, or profile still on old tunnel. Fix key; re-run `cgw use`. |
-| `Tunnel service is not installed; rerun full setup` | Don't use `codex-chatgpt-web tunnel restart`; the launcher owns the runtime. Use `cgw use <label>`. |
-| `a ChatGPT login exists but no current account is registered` | Run `cgw adopt <label>` for the account that is logged in now. |
+| Log: `401 tunnel_active_organization_required` / 403 | Key from another org, or profile still on the old tunnel. Redo step 6; `cgw use <label>`. |
+| `Tunnel service is not installed; rerun full setup` | Don't use `codex-chatgpt-web tunnel restart` (launcher owns the runtime). Use `cgw use <label>`. |
+| `a ChatGPT login exists but no current account is registered` | `cgw adopt <label>` for the account logged in now. |
 | `cgw: no codex-chatgpt-web version found` | Launcher never started; open it once. |
