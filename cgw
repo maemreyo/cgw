@@ -49,7 +49,7 @@ start_launcher() {
 free_port() { # setup binds the proxy port itself; the launcher's own serve must step aside
   [ "${DRY:-}" = 1 ] && { echo "[dry-run] kill listener on :$PORT"; return; }
   local p; p=$(lsof -nP -iTCP:$PORT -sTCP:LISTEN -t 2>/dev/null || true)
-  [ -n "$p" ] && kill $p
+  [ -n "$p" ] && echo "$p" | xargs kill
   for _ in 1 2 3 4 5 6 7 8; do lsof -nP -iTCP:$PORT -sTCP:LISTEN >/dev/null 2>&1 || return; sleep 1; done
   die "port $PORT still busy"
 }
@@ -131,8 +131,9 @@ cmd_list() {
   [ -d "$ACC" ] || { echo "no accounts yet — run: cgw adopt NAME"; return; }
   for d in "$ACC"/*/; do
     n=$(basename "$d"); [ -f "$d/account.env" ] || continue
-    printf '%s %-16s %s  login:%s\n' "$([ "$n" = "$cur" ] && echo '*' || echo ' ')" "$n" "$(env_get "$n" TUNNEL_ID)" \
-      "$([ "$n" = "$cur" ] && echo active || { [ -d "$d/partition" ] && echo saved || echo none; })"
+    mark=" "; state=none
+    if [ "$n" = "$cur" ]; then mark="*"; state=active; elif [ -d "$d/partition" ]; then state=saved; fi
+    printf '%s %-16s %s  login:%s\n' "$mark" "$n" "$(env_get "$n" TUNNEL_ID)" "$state"
   done
 }
 

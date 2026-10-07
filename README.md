@@ -1,5 +1,7 @@
 # cgw — account switcher for Codex Web GPT
 
+[![lint](https://github.com/maemreyo/cgw/actions/workflows/lint.yml/badge.svg)](https://github.com/maemreyo/cgw/actions/workflows/lint.yml) [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE) ![platform: macOS](https://img.shields.io/badge/platform-macOS-lightgrey)
+
 Switches [codex-chatgpt-web](https://github.com/miuuyy/codex-chatgpt-web) ("Codex Web GPT" launcher,
 tested with 6.1.5, macOS arm64) between ChatGPT accounts in one command, instead of redoing
 the setup by hand each time.
@@ -56,3 +58,13 @@ Login snapshots are not portable across machines; sign in again on the new one.
 
 `adopt/add/list` and the `DRY=1` flow are verified. The live partition swap between two real accounts
 had not been exercised when this was written — test with a throwaway account first.
+
+## Disclaimer
+
+Independent project, not affiliated with or endorsed by OpenAI or the codex-chatgpt-web authors. The underlying
+launcher automates a ChatGPT web session and is unofficial software; you are responsible for complying with
+OpenAI's terms. Use only with accounts you own. No warranty — see [LICENSE](LICENSE).
+
+## Contributing / security / license
+
+[CONTRIBUTING.md](CONTRIBUTING.md) · [SECURITY.md](SECURITY.md) · [CHANGELOG.md](CHANGELOG.md) · [MIT](LICENSE)
