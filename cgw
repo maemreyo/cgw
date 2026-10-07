@@ -90,7 +90,7 @@ cmd_clip() {
       echo "$verb '$n' tunnel: $v" ;;
     key)
       need_acc "$n"
-      [ -n "$v" ] && [[ "$v" != tunnel_* ]] && [ "${#v}" -ge 20 ] || die "clipboard does not look like a runtime key; copy it again right after creating it"
+      if [ "${#v}" -lt 20 ] || [[ "$v" == tunnel_* ]]; then die "clipboard does not look like a runtime key; copy it again right after creating it"; fi
       local tid code tmp; tid=$(env_get "$n" TUNNEL_ID)
       tmp=$(mktemp); chmod 600 "$tmp"; printf '%s' "$v" > "$tmp"
       code=$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $v" "https://api.openai.com/v1/tunnels/$tid")
