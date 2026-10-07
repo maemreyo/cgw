@@ -7,7 +7,7 @@
 #   cgw clip tunnel NAME                    take the tunnel id from the clipboard (user pressed copy)
 #   cgw clip key NAME                       take the runtime key from the clipboard, verify, store, clear clipboard
 #   cgw use NAME                            switch to NAME (DRY=1 cgw use NAME to preview)
-#   cgw list | status | remove NAME
+#   cgw list | status | remove NAME | version
 set -uo pipefail
 
 H="$HOME/.codex-chatgpt-web"
@@ -16,6 +16,7 @@ APP="Codex Web GPT"
 UD="$HOME/Library/Application Support/Codex Web GPT"
 PART="$UD/Partitions/codex-web-gpt-chatgpt"
 PORT=17841
+CGW_VERSION="0.2.0"
 TESTED_VERSION="6.1.5"   # codex-chatgpt-web release cgw was last verified against
 
 die() { echo "cgw: $*" >&2; exit 1; }
@@ -180,6 +181,7 @@ case "${1:-}" in
   add)    shift; cmd_add "$@" ;;
   clip)   shift; cmd_clip "$@" ;;
   use)    shift; cmd_use "$@" ;;
+  version|--version|-v) echo "cgw $CGW_VERSION (tested with codex-chatgpt-web $TESTED_VERSION)" ;;
   list|ls) cmd_list ;;
   status) cmd_status ;;
   remove|rm) shift; cmd_remove "$@" ;;

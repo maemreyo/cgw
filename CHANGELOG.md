@@ -3,11 +3,10 @@
 Format: [Keep a Changelog](https://keepachangelog.com/), versioning: [SemVer](https://semver.org/).
 
 ## [Unreleased]
-### Added
-- Version check: warn when the installed codex-chatgpt-web differs from the tested release; `cgw status` shows both. README "Compatibility" section.
 
 ## [0.2.0] - 2026-10-07
 ### Added
+- `cgw version`; warning when the installed codex-chatgpt-web differs from the tested release (`cgw status` shows both); README "Compatibility" section.
 - `cgw clip tunnel|key NAME`: take the tunnel id / runtime key from the clipboard (key verified, stored 0600, clipboard cleared) so secrets never pass through chat or shell history.
 ### Changed
 - `AGENT_SETUP.md` rewritten as a step-by-step guided conversation; the user only clicks, copies and confirms.
