@@ -4,6 +4,8 @@ Switches [codex-chatgpt-web](https://github.com/miuuyy/codex-chatgpt-web) ("Code
 tested with 6.1.5, macOS arm64) between ChatGPT accounts in one command, instead of redoing
 the setup by hand each time.
 
+> **AI agents:** follow [AGENT_SETUP.md](AGENT_SETUP.md) to install/update a tunnel end-to-end.
+
 ```
 cgw adopt NAME                       register the account that is set up right now
 cgw add NAME TUNNEL_ID KEY_FILE      register another account (key copied 0600, validated against the API)

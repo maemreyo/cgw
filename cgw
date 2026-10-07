@@ -69,17 +69,20 @@ cmd_add() {
   [ -n "$n" ] && [ -n "$tid" ] && [ -f "$kf" ] || die "usage: cgw add NAME TUNNEL_ID KEY_FILE"
   local code; code=$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $(cat "$kf")" "https://api.openai.com/v1/tunnels/$tid")
   [ "$code" = 200 ] || die "key cannot read that tunnel (HTTP $code) — check org/workspace and Tunnels Read+Use"
+  local verb=added; [ -f "$ACC/$n/account.env" ] && verb=updated
   mkdir -p "$ACC/$n"; chmod 700 "$ACC" "$ACC/$n"
   install -m 600 "$kf" "$ACC/$n/runtime.key"
   printf 'TUNNEL_ID=%s\n' "$tid" > "$ACC/$n/account.env"
-  echo "added '$n'. Switch with: cgw use $n   (first switch opens ChatGPT login)"
+  echo "$verb '$n'. Apply with: cgw use $n   (a new account opens ChatGPT login first)"
 }
 
 cmd_use() {
   local n=${1:-}; [ -n "$n" ] || die "usage: cgw use NAME"; need_acc "$n"
   local cur; cur=$(current)
   local tid; tid=$(env_get "$n" TUNNEL_ID)
-  local login=""
+  local login="" ack=""
+  # Only set CGW_ACK=1 after the user has explicitly accepted setup's "unofficial software" notice.
+  [ "${CGW_ACK:-}" = 1 ] && ack="--acknowledge-unofficial"
 
   echo "==> quitting launcher"; quit_launcher
 
@@ -105,9 +108,9 @@ cmd_use() {
   free_port
   echo "==> configuring tunnel for '$n'"
   if [ "${DRY:-}" = 1 ]; then
-    echo "[dry-run] cgw setup --full $login --refresh-account-capabilities --tunnel-id $tid --runtime-key-file $ACC/$n/runtime.key"
+    echo "[dry-run] cgw setup --full $login $ack --refresh-account-capabilities --tunnel-id $tid --runtime-key-file $ACC/$n/runtime.key"
   else
-    cgw_cli setup --full $login --refresh-account-capabilities --tunnel-id "$tid" --runtime-key-file "$ACC/$n/runtime.key" || die "setup failed (launcher is open; fix and re-run: cgw use $n)"
+    cgw_cli setup --full $login $ack --refresh-account-capabilities --tunnel-id "$tid" --runtime-key-file "$ACC/$n/runtime.key" || die "setup failed (launcher is open; fix and re-run: cgw use $n)"
   fi
   echo "==> restarting launcher so the tunnel profile is regenerated"
   quit_launcher; start_launcher
