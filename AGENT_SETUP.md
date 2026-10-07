@@ -25,7 +25,7 @@ Target: macOS, [codex-chatgpt-web](https://github.com/miuuyy/codex-chatgpt-web) 
 ```bash
 ls /Applications/"Codex Web GPT.app" ~/.codex-chatgpt-web/versions; which cgw; cgw list
 ```
-Decide silently which of steps 2–3 are needed. Tell the user one line: what's installed and what you'll do.
+Note the launcher version; `cgw` prints a warning when it differs from the version it was tested with — relay that warning to the user, and if `setup` then fails on an unknown flag or missing file, stop and report instead of improvising. Decide silently which of steps 2–3 are needed. Tell the user one line: what's installed and what you'll do.
 
 ### 2. Launcher: install or update (skip if already latest)
 Check latest: `gh release view -R miuuyy/codex-chatgpt-web --json tagName --jq .tagName` (or the releases page) vs

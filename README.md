@@ -72,6 +72,20 @@ All account data stays under `~/.codex-chatgpt-web/accounts/` (mode 0700). Nothi
    (log: `401 tunnel_active_organization_required`).
 7. Run `doctor`.
 
+## Compatibility
+
+`cgw` drives the launcher through its CLI and on-disk layout, not a stable API, so a new codex-chatgpt-web release can break it.
+It relies on:
+
+- CLI: `cli.js setup --full [--login] [--acknowledge-unofficial] [--refresh-account-capabilities] --tunnel-id … --runtime-key-file …`, `doctor`
+- Files: `~/.codex-chatgpt-web/{config.json,versions/*,runtime/launcher-browser.json,secrets/,tunnel/profiles/}`
+- Launcher behavior: owns `serve` on port 17841 and the tunnel runtime, regenerates the tunnel profile only at startup
+- App data: the Electron partition `Partitions/codex-web-gpt-chatgpt` under `~/Library/Application Support/Codex Web GPT`
+
+Last verified: **6.1.5**. `cgw` picks the newest installed version and prints a warning if it differs from the tested one.
+After updating the launcher, run `DRY=1 cgw use NAME`, then `cgw use NAME` and `cgw status`; if something breaks, open an issue with
+your launcher version and the failing step. Bump `TESTED_VERSION` in `cgw` when you verify a new release.
+
 ## Notes and gotchas
 
 - `setup` requires accepting the launcher's "independent, unofficial software" notice. `cgw` never accepts it for you;

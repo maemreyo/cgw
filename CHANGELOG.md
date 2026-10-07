@@ -3,6 +3,8 @@
 Format: [Keep a Changelog](https://keepachangelog.com/), versioning: [SemVer](https://semver.org/).
 
 ## [Unreleased]
+### Added
+- Version check: warn when the installed codex-chatgpt-web differs from the tested release; `cgw status` shows both. README "Compatibility" section.
 
 ## [0.2.0] - 2026-10-07
 ### Added

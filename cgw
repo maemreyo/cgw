@@ -16,12 +16,17 @@ APP="Codex Web GPT"
 UD="$HOME/Library/Application Support/Codex Web GPT"
 PART="$UD/Partitions/codex-web-gpt-chatgpt"
 PORT=17841
+TESTED_VERSION="6.1.5"   # codex-chatgpt-web release cgw was last verified against
 
 die() { echo "cgw: $*" >&2; exit 1; }
 run() { if [ "${DRY:-}" = 1 ]; then echo "[dry-run] $*"; else "$@"; fi; }
 
 V=$(/bin/ls -d "$H"/versions/*/ 2>/dev/null | sort -V | tail -1); V=${V%/}
 [ -n "$V" ] || die "no codex-chatgpt-web version found in $H/versions"
+LAUNCHER_VERSION=${V##*/}; LAUNCHER_VERSION=${LAUNCHER_VERSION%%-*}
+warn_version() {
+  [ "$LAUNCHER_VERSION" = "$TESTED_VERSION" ] || echo "cgw: warning: codex-chatgpt-web $LAUNCHER_VERSION is newer/older than the tested $TESTED_VERSION; flags, file layout or launcher behavior may differ (see README > Compatibility). Continuing." >&2
+}
 cgw_cli() { "$V/runtime/bun" "$V/app/cli.js" "$@"; }
 
 current() { cat "$ACC/.current" 2>/dev/null || true; }
@@ -103,6 +108,7 @@ cmd_clip() {
 
 cmd_use() {
   local n=${1:-}; [ -n "$n" ] || die "usage: cgw use NAME"; need_acc "$n"
+  warn_version
   local cur; cur=$(current)
   local tid; tid=$(env_get "$n" TUNNEL_ID)
   local login="" ack=""
@@ -162,7 +168,7 @@ cmd_list() {
   done
 }
 
-cmd_status() { echo "current: $(current || true)"; cgw_cli doctor 2>&1 | tail -14; }
+cmd_status() { warn_version; echo "current: $(current || true)  |  codex-chatgpt-web $LAUNCHER_VERSION (tested: $TESTED_VERSION)"; cgw_cli doctor 2>&1 | tail -14; }
 
 cmd_remove() {
   local n=${1:-}; need_acc "$n"; [ "$(current)" = "$n" ] && die "'$n' is active; switch first"
