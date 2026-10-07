@@ -2,71 +2,106 @@
 
 [![lint](https://github.com/maemreyo/cgw/actions/workflows/lint.yml/badge.svg)](https://github.com/maemreyo/cgw/actions/workflows/lint.yml) [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE) ![platform: macOS](https://img.shields.io/badge/platform-macOS-lightgrey)
 
-Switches [codex-chatgpt-web](https://github.com/miuuyy/codex-chatgpt-web) ("Codex Web GPT" launcher,
-tested with 6.1.5, macOS arm64) between ChatGPT accounts in one command, instead of redoing
-the setup by hand each time.
+`cgw` is a small Bash tool that moves a [codex-chatgpt-web](https://github.com/miuuyy/codex-chatgpt-web)
+("Codex Web GPT" launcher) install from one ChatGPT account to another with a single command.
+It saves and restores each account's ChatGPT sign-in, tunnel ID and runtime key, so you don't have to repeat the
+full-harness setup by hand every time you change accounts (for example personal vs. work).
 
-> **Using an AI agent?** Send it: *"Cài và update new tunnel giúp tôi: https://raw.githubusercontent.com/maemreyo/cgw/main/AGENT_SETUP.md"* — it guides you step by step ([AGENT_SETUP.md](AGENT_SETUP.md)); you only click, copy and say "xong".
+`cgw` activates **one account at a time, when you ask it to**. It does not rotate accounts automatically, pool them,
+or work around usage limits.
 
+> **Using an AI agent (Claude Code, Codex, …)?** Just send it:
+> `Install and update a new tunnel for me: https://raw.githubusercontent.com/maemreyo/cgw/main/AGENT_SETUP.md`
+> The agent walks you through it one step at a time ([AGENT_SETUP.md](AGENT_SETUP.md)); you only click, copy and confirm.
+
+## Requirements
+
+- macOS (developed on Apple silicon) with the Codex Web GPT launcher installed — tested with 6.1.5.
+- `bash`, `python3`, `curl` (all ship with macOS).
+- An OpenAI tunnel and a runtime key with **Tunnels Read + Use** for each account, created in that account's organization.
+
+## Install
+
+```bash
+git clone https://github.com/maemreyo/cgw ~/Documents/projects/cgw
+~/Documents/projects/cgw/install.sh      # symlinks cgw into ~/.local/bin
 ```
-cgw adopt NAME                       register the account that is set up right now
-cgw add NAME TUNNEL_ID KEY_FILE      register another account (key copied 0600, validated against the API)
-cgw clip tunnel NAME                 read the tunnel id from the clipboard (after you press copy)
-cgw clip key NAME                    read the runtime key from the clipboard, verify, store 0600, clear clipboard
-cgw use NAME                         switch (DRY=1 cgw use NAME previews every step)
-cgw list | status | remove NAME
+
+## Quick start
+
+```bash
+cgw adopt personal                       # register the account that is set up right now
+cgw clip tunnel work                     # copy the tunnel ID in the OpenAI dashboard, then run this
+cgw clip key work                        # copy the new runtime key, then run this (verified, stored 0600, clipboard cleared)
+cgw use work                             # switch; the first time it opens a ChatGPT sign-in
+cgw use personal                         # switch back, no sign-in needed
 ```
+
+Prefer files over the clipboard? `cgw add NAME TUNNEL_ID KEY_FILE` does the same in one go.
+
+## Commands
+
+| Command | What it does |
+|---|---|
+| `cgw adopt NAME` | Register the account that is configured right now (do this once before the first switch). |
+| `cgw add NAME TUNNEL_ID KEY_FILE` | Register or update an account; the key is validated against the API and copied with mode 0600. |
+| `cgw clip tunnel NAME` | Read the tunnel ID from the clipboard. |
+| `cgw clip key NAME` | Read the runtime key from the clipboard, verify it can read the tunnel, store it, clear the clipboard. |
+| `cgw use NAME` | Switch to `NAME`. `DRY=1 cgw use NAME` previews every step; `CGW_ACK=1` accepts setup's notice non-interactively (see below). |
+| `cgw list` / `cgw status` / `cgw remove NAME` | List accounts, run the launcher's `doctor`, delete a saved account. |
 
 ## What is per-account
 
 | Piece | Where it lives | How cgw handles it |
 |---|---|---|
-| ChatGPT login | `~/Library/Application Support/Codex Web GPT/Partitions/codex-web-gpt-chatgpt` (~360MB) | moved to `~/.codex-chatgpt-web/accounts/<name>/partition` when switching away, moved back when switching in |
-| Tunnel id + runtime key (Tunnels Read+Use, from that account's OpenAI org) | `accounts/<name>/account.env`, `runtime.key` | passed to `setup --full` |
-| Connector "Codex Native2" attached to the tunnel | ChatGPT → Settings → Plugins | **manual, once per account** (cannot be automated) |
+| ChatGPT sign-in | `~/Library/Application Support/Codex Web GPT/Partitions/codex-web-gpt-chatgpt` (~360 MB) | moved to `~/.codex-chatgpt-web/accounts/<name>/partition` when switching away, moved back when switching in |
+| Tunnel ID + runtime key | `accounts/<name>/account.env`, `accounts/<name>/runtime.key` | passed to `setup --full` |
+| Connector "Codex Native2" attached to the tunnel | ChatGPT → Settings → Plugins | **manual, once per account** — it cannot be automated |
 
-All account data stays under `~/.codex-chatgpt-web/accounts/` (mode 700). Nothing secret is in this repo.
+All account data stays under `~/.codex-chatgpt-web/accounts/` (mode 0700). Nothing secret is in this repository.
 
-## `cgw use` sequence (and why)
+## What `cgw use` does, and why
 
-1. Quit launcher, kill stray `tunnel-client run`.
-2. Swap the ChatGPT partition (new account without a saved login → `setup --login`).
-3. Open launcher (setup needs its browser descriptor `runtime/launcher-browser.json`).
-4. Kill the launcher's own `serve` on :17841 — `setup` binds that port itself, else `EADDRINUSE`.
-5. `setup --full --refresh-account-capabilities --tunnel-id … --runtime-key-file …`.
-6. Quit + reopen launcher — the launcher owns the tunnel runtime and only regenerates
-   `tunnel/profiles/codex-chatgpt-web.yaml` at startup; skipping this leaves the old tunnel
-   running (401 `tunnel_active_organization_required`).
-7. `doctor`.
+1. Quit the launcher and any stray `tunnel-client run`.
+2. Swap the ChatGPT partition (an account without a saved sign-in gets `setup --login`).
+3. Open the launcher — `setup` needs its browser descriptor, `runtime/launcher-browser.json`.
+4. Stop the launcher's own `serve` on port 17841 — `setup` binds that port itself and otherwise fails with `EADDRINUSE`.
+5. Run `setup --full --refresh-account-capabilities --tunnel-id … --runtime-key-file …`.
+6. Quit and reopen the launcher. It owns the tunnel runtime and only regenerates
+   `tunnel/profiles/codex-chatgpt-web.yaml` at startup; skipping this leaves the old tunnel running
+   (log: `401 tunnel_active_organization_required`).
+7. Run `doctor`.
 
-## Gotchas learned
+## Notes and gotchas
 
-- `setup` requires accepting the "unofficial software" notice (`--acknowledge-unofficial`).
-  cgw deliberately does **not** pass it; setup prompts when needed.
-- A runtime key only works for tunnels in its own organization; the old account's key gets 403/401 on another org's tunnel.
-- `codex-chatgpt-web tunnel restart` does not help ("Tunnel service is not installed") when the launcher owns the runtime.
-- Updating the app: quit launcher, then
+- `setup` requires accepting the launcher's "independent, unofficial software" notice. `cgw` never accepts it for you;
+  `setup` prompts, or you opt in explicitly with `CGW_ACK=1 cgw use NAME` after reading it.
+- A runtime key only works for tunnels in its own organization (401/403 otherwise).
+- `codex-chatgpt-web tunnel restart` does not help ("Tunnel service is not installed") while the launcher owns the runtime.
+- Updating the launcher: quit it, then
   `curl -fsSL https://github.com/miuuyy/codex-chatgpt-web/releases/latest/download/install-launcher.sh | sh`
-  (checksum-verified). A new version may ask for the notice again.
+  (checksum-verified; keeps your sign-in). A new version may show the notice again.
 
-## New machine
+## Setting up a new machine
 
-1. Install the launcher (command above) and open it once.
-2. `./install.sh`
-3. Per account: create a tunnel + runtime key at platform.openai.com → `cgw add NAME TUNNEL_ID KEY_FILE` → `cgw use NAME` → sign in to ChatGPT → attach the connector.
-Login snapshots are not portable across machines; sign in again on the new one.
+1. Install the launcher with the command above and open it once.
+2. `git clone` this repository and run `./install.sh`.
+3. For each account: create a tunnel and a runtime key at platform.openai.com → `cgw clip tunnel` / `cgw clip key` → `cgw use NAME` → sign in to ChatGPT → attach the connector.
 
-## Status
+Saved sign-ins are not portable between machines; sign in again on the new one.
 
-`adopt/add/list` and the `DRY=1` flow are verified. The live partition swap between two real accounts
-had not been exercised when this was written — test with a throwaway account first.
+## Known limitations
+
+- macOS only; the launcher paths are hard-coded to its default locations.
+- The partition swap between two real accounts is implemented but has had little real-world testing — try it with a throwaway account before relying on it.
+- The ChatGPT connector step is manual.
 
 ## Disclaimer
 
 Independent project, not affiliated with or endorsed by OpenAI or the codex-chatgpt-web authors. The underlying
 launcher automates a ChatGPT web session and is unofficial software; you are responsible for complying with
-OpenAI's terms. Use only with accounts you own. No warranty — see [LICENSE](LICENSE).
+OpenAI's terms. Use it only with accounts you own. No warranty — see [LICENSE](LICENSE).
 
-## Contributing / security / license
+## Contributing, security, license
 
-[CONTRIBUTING.md](CONTRIBUTING.md) · [SECURITY.md](SECURITY.md) · [CHANGELOG.md](CHANGELOG.md) · [MIT](LICENSE)
+[CONTRIBUTING.md](CONTRIBUTING.md) · [SECURITY.md](SECURITY.md) · [CHANGELOG.md](CHANGELOG.md) · [MIT License](LICENSE)

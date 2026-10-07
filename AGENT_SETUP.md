@@ -1,7 +1,7 @@
 # Agent runbook: install / update a Codex Web GPT tunnel with `cgw`
 
 You are an AI agent. The user sent you this file with a request such as "install and update the new tunnel".
-**Run this as a guided conversation: one step at a time, in the user's language.** The user must not need to
+**Run this as a guided conversation: one step at a time, in the user's language** (the quoted lines below are English templates; translate them). The user must not need to
 remember any command, path or ID. Each step: say what you are doing, do it, tell the user the *one* thing you need
 from them (a click, a copy, a yes), then wait. Never dump the whole plan at them.
 
@@ -41,23 +41,23 @@ sh /tmp/install-launcher.sh                                  # verifies SHA-256,
 ```bash
 git clone https://github.com/maemreyo/cgw ~/Documents/projects/cgw && ~/Documents/projects/cgw/install.sh
 ```
-If `cgw list` is empty but `~/.codex-chatgpt-web/config.json` exists, ask: "Máy đang chạy account nào? Đặt tên gì?" then
+If `cgw list` is empty but `~/.codex-chatgpt-web/config.json` exists, ask: "Which ChatGPT account is set up on this machine right now, and what should I call it?" then
 `cgw adopt <name>` — otherwise the current ChatGPT login would be lost on the first switch.
 
 ### 4. Which account? (ask)
 Show `cgw list` and ask: update the tunnel of an existing account, or add a new account? Get a short label.
-For a new label also ask: "Account ChatGPT này đã đăng nhập sẵn ở launcher chưa?" (it will be asked to sign in during step 7 anyway).
+For a new label also ask: "Is this ChatGPT account already signed in inside the launcher?" (it will be asked to sign in during step 7 anyway).
 
 ### 5. Tunnel id — user copies, you read
 1. `open "https://platform.openai.com/settings/organization/tunnels"`
-2. Tell the user: *"Mở đúng organization của account này (góc trên-trái), tạo tunnel mới nếu chưa có (Create), rồi bấm icon copy cạnh ID `tunnel_…` và nhắn mình 'xong'."*
-3. After "xong": `cgw clip tunnel <label>` → prints the id. Show it back and ask "đúng tunnel này chứ?" (the name column is visible to them).
+2. Tell the user: *"Select the right organization for this account (top-left), create a tunnel if there isn't one yet (Create), then click the copy icon next to the `tunnel_…` ID and tell me 'done'."*
+3. After "done": `cgw clip tunnel <label>` → prints the id. Show it back and ask "Is this the right tunnel?" (the name column is visible to them).
 If it fails with "clipboard does not hold a tunnel id", ask them to click copy again.
 
 ### 6. Runtime key — user creates + copies, you read
 1. `open "https://platform.openai.com/settings/organization/api-keys"`
-2. Tell the user, concisely: *"Cùng organization và workspace với tunnel. Create new secret key → đặt tên (vd `codex-tunnel`) → quyền Restricted: **Tunnels = Read + Use** → Create. Bấm copy key (⌘C) và nhắn 'xong'. Đừng dán vào chat."*
-3. After "xong": `cgw clip key <label>`.
+2. Tell the user, concisely: *"Use the same organization and workspace as the tunnel. Create new secret key → name it (e.g. `codex-tunnel`) → permissions Restricted: **Tunnels = Read + Use** → Create. Copy the key (⌘C) and tell me 'done'. Do not paste it into the chat."*
+3. After "done": `cgw clip key <label>`.
    - `verified (HTTP 200)` → continue.
    - `HTTP 401/403` → key is from another org/workspace or lacks permission. Explain, tell them to create another, repeat.
    - "does not look like a runtime key" → they copied something else; ask to copy again right after creation (keys are shown once).
@@ -67,7 +67,7 @@ Say what will happen (launcher closes/reopens, ~2 min) and show the notice from 
 ```bash
 CGW_ACK=1 cgw use <label>          # DRY=1 CGW_ACK=1 cgw use <label> previews
 ```
-- No saved login for this label → the launcher opens a ChatGPT sign-in. Tell the user: *"Đăng nhập ChatGPT trong cửa sổ Codex Web GPT vừa mở, xong nhắn mình."* Wait. If setup timed out, re-run `cgw use <label>` (safe to repeat).
+- No saved login for this label → the launcher opens a ChatGPT sign-in. Tell the user: *"Sign in to ChatGPT in the Codex Web GPT window that just opened, then tell me when you're done."* Wait. If setup timed out, re-run `cgw use <label>` (safe to repeat).
 - Do not interrupt midway; re-running recovers.
 
 ### 8. Verify
@@ -79,8 +79,8 @@ tail -n 5 ~/Library/Application\ Support/tunnel-client/logs/codex-chatgpt-web.lo
 Expect "tunnel-client started" and no repeating `poll failed`. Old id in the yaml → run `cgw use <label>` again.
 
 ### 9. Hand back (two manual steps, guide them one by one)
-1. `open "https://chatgpt.com/#settings/Plugins"` → *"Gắn tunnel mới vào connector 'Codex Native2' và refresh plugin Codex. Xong nhắn mình."*
-2. *"Restart app Codex một lần để nạp lại danh sách model."*
+1. `open "https://chatgpt.com/#settings/Plugins"` → *"Attach the new tunnel to the 'Codex Native2' connector and refresh the Codex plugin, then tell me when you're done."*
+2. *"Restart the Codex app once so it reloads the model list."*
 
 Final report (short): launcher version, active label, tunnel id (never the key), doctor result, what's left for them (nothing if both manual steps are done).
 
